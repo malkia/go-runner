@@ -186,7 +186,6 @@ func main() {
 	targets[0] = path.Join(*bindir, *arch+"l");
 	targets[1] = "-o";
 	targets[2] = target;
-
 	doLink := false;
 	i := 3;
 	for _, v := range files {
