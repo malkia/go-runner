@@ -27,14 +27,12 @@ var (
 	curdir, _	= os.Getwd();
 	envbin		= os.Getenv("GOBIN");
 	envarch		= os.Getenv("GOARCH");
+	envos		= os.Getenv("GOOS");
 	archmap		= map[string]string{"amd64": "6", "x86": "8", "arm": "5"};
-	bindir		= &envbin; //flag.String("b", envbin, "Go binaries directory");
-	defarch     = getmap(archmap,envarch);
-	arch		= &defarch; //flag.String("a", getmap(archmap, envarch), "Architecture type 5=arm 6=amd64 8=x86");
+	bindir		= &envbin;	//flag.String("b", envbin, "Go binaries directory");
+	defarch		= getmap(archmap, envarch);
+	arch		= &defarch;	//flag.String("a", getmap(archmap, envarch), "Architecture type 5=arm 6=amd64 8=x86");
 	debug		= flag.Bool("d", false, "Debug mode");
-//	clean		= flag.Bool("C", false, "Clean");
-//	keepgoing	= flag.Bool("k", false, "Keep on going even with errors");
-//	domakefile	= flag.Bool("m", false, "Create makefile");
 )
 
 func chk(e os.Error) {
@@ -124,20 +122,11 @@ func CollectSourceFiles(sourcePath string) (sourceTable map[int]string, error os
 func shouldUpdate(sourceFile, targetFile string) (doUpdate bool, error os.Error) {
 	sourceStat, error := os.Lstat(sourceFile);
 	if error != nil {
-		// No source file. No update relevant
 		return false, error
-	}
-	if *debug {
-		fmt.Fprintf(os.Stderr, "source %v time: %v %v %v\n", sourceFile, sourceStat.Atime_ns, sourceStat.Mtime_ns, sourceStat.Ctime_ns)
 	}
 	targetStat, error := os.Lstat(targetFile);
 	if error != nil {
-		//		fmt.Printf( "not found %s\n", targetFile );
-		// No target file. Update needed.
 		return true, error
-	}
-	if *debug {
-		fmt.Fprintf(os.Stderr, "target %v time: %v %v %v\n", targetFile, sourceStat.Atime_ns, sourceStat.Mtime_ns, sourceStat.Ctime_ns)
 	}
 	return targetStat.Mtime_ns < sourceStat.Mtime_ns, error;
 }
@@ -153,16 +142,14 @@ func compile(target string) {
 		if returnCode != 0 {
 			fmt.Fprintf(os.Stderr, "Error compiling %v\n", filename+".go")
 		}
-	}
-	if error != nil {
+	} else if error != nil {
 		fmt.Fprintln(os.Stderr, error)
 	}
 }
 
-func usage()
-{
-    fmt.Fprintln(os.Stderr, "go main-program [arg0 [arg1 ...]]\n\nOptions:");
-    flag.PrintDefaults();
+func usage() {
+	fmt.Fprintln(os.Stderr, "go main-program [arg0 [arg1 ...]]\n\nOptions:");
+	flag.PrintDefaults();
 	fmt.Fprintf(os.Stderr, "\nExamples:\n  go test arg1 arg2 arg3 -- This would compile test.go and all other local source files it refers to and then call it with arg1 arg2 arg3\n\n");
 }
 
@@ -183,7 +170,7 @@ func main() {
 		os.Exit(1);
 	}
 
-// Compiling source files
+	// Compiling source files
 	for k := len(files) - 1; k >= 0; k-- {
 		v := files[k];
 		if v != "" {
@@ -193,12 +180,13 @@ func main() {
 		}
 	}
 
-// Linking produced objects into executable
-// TODO: On Windows this should add ".exe" to the target
+	//	Linking produced objects into executable
+	//	TODO: On Windows this should add ".exe" to the target
 	targets := make([]string, len(files)+3);
 	targets[0] = path.Join(*bindir, *arch+"l");
 	targets[1] = "-o";
 	targets[2] = target;
+
 	doLink := false;
 	i := 3;
 	for _, v := range files {
