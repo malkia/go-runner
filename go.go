@@ -28,7 +28,7 @@ var (
 	envbin		= os.Getenv("GOBIN");
 	envarch		= os.Getenv("GOARCH");
 	envos		= os.Getenv("GOOS");
-	archmap		= map[string]string{"amd64": "6", "x86": "8", "arm": "5"};
+	archmap		= map[string]string{"amd64": "6", "386": "8", "arm": "5"};
 	bindir		= &envbin;	//flag.String("b", envbin, "Go binaries directory");
 	defarch		= getmap(archmap, envarch);
 	arch		= &defarch;	//flag.String("a", getmap(archmap, envarch), "Architecture type 5=arm 6=amd64 8=x86");
@@ -140,7 +140,8 @@ func compile(target string) {
 	if doUpdate {
 		returnCode := exec([]string{path.Join(*bindir, *arch+"g"), filename + ".go"}, dir);
 		if returnCode != 0 {
-			fmt.Fprintf(os.Stderr, "Error compiling %v\n", filename+".go")
+			fmt.Fprintf(os.Stderr, "Error compiling %v\n", filename+".go");
+			os.Exit(1);
 		}
 	} else if error != nil {
 		fmt.Fprintln(os.Stderr, error)
