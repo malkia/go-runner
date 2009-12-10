@@ -7,7 +7,6 @@ package main
 import (
 	"os";
 	"fmt";
-	"flag";
 	"io/ioutil";
 	"go/parser";
 	"go/ast";
@@ -26,31 +25,20 @@ func getmap(m map[string]string, k string) (v string) {
 var (
 	curdir, _	= os.Getwd();
 	envbin		= os.Getenv("GOBIN");
-	envarch		= os.Getenv("GOARCH");
-	envos		= os.Getenv("GOOS");
 	archmap		= map[string]string{"amd64": "6", "386": "8", "arm": "5"};
-	bindir		= &envbin;	//flag.String("b", envbin, "Go binaries directory");
-	defarch		= getmap(archmap, envarch);
-	arch		= &defarch;	//flag.String("a", getmap(archmap, envarch), "Architecture type 5=arm 6=amd64 8=x86");
-	debug		= flag.Bool("d", false, "Debug mode");
+	arch		= getmap(archmap, os.Getenv("GOARCH"));
 )
 
-func chk(e os.Error) {
-	if e != nil {
-		fmt.Fprintln(os.Stderr, e);
-		os.Exit(1);
+func exec(args []string, dir string) (returnCode int, error os.Error) {
+	p, error := os.ForkExec(args[0], args, os.Environ(), dir, []*os.File{os.Stdin, os.Stdout, os.Stderr});
+	if error != nil {
+		return
 	}
-}
-
-func exec(args []string, dir string) int {
-	p, e := os.ForkExec(args[0], args, os.Environ(), dir, []*os.File{os.Stdin, os.Stdout, os.Stderr});
-	if *debug {
-		fmt.Fprintf(os.Stderr, "exec pid=%v\terr=%v\tdir=%v\tcmd=%v\n", p, e, dir, args)
+	m, error := os.Wait(p, 0);
+	if error != nil {
+		return
 	}
-	chk(e);
-	m, e := os.Wait(p, 0);
-	chk(e);
-	return int(m.WaitStatus);
+	return int(m.WaitStatus), nil;
 }
 
 func getLocalImports(filename string) (imports map[string]bool, error os.Error) {
@@ -58,12 +46,10 @@ func getLocalImports(filename string) (imports map[string]bool, error os.Error) 
 	if error != nil {
 		return
 	}
-
 	file, error := parser.ParseFile(filename, source, parser.ImportsOnly);
 	if error != nil {
 		return
 	}
-
 	for _, importDecl := range file.Decls {
 		importDecl, ok := importDecl.(*ast.GenDecl);
 		if ok {
@@ -135,36 +121,34 @@ func compile(target string) {
 	dir, filename := path.Split(target);
 	dir = path.Join(curdir, dir);
 	source := path.Join(dir, filename+".go");
-	object := path.Join(dir, filename+"."+*arch);
+	object := path.Join(dir, filename+"."+arch);
 	doUpdate, error := shouldUpdate(source, object);
 	if doUpdate {
-		returnCode := exec([]string{path.Join(*bindir, *arch+"g"), filename + ".go"}, dir);
-		if returnCode != 0 {
-			fmt.Fprintf(os.Stderr, "Error compiling %v\n", filename+".go");
+		returnCode, error := exec([]string{path.Join(envbin, arch+"g"), filename + ".go"}, dir);
+		if error != nil {
+			fmt.Fprintf(os.Stderr, "Can't %s\n", error);
 			os.Exit(1);
+		}
+		if returnCode != 0 {
+			os.Exit(returnCode)
 		}
 	} else if error != nil {
 		fmt.Fprintln(os.Stderr, error)
 	}
 }
 
-func usage() {
-	fmt.Fprintln(os.Stderr, "go main-program [arg0 [arg1 ...]]\n\nOptions:");
-	flag.PrintDefaults();
-	fmt.Fprintf(os.Stderr, "\nExamples:\n  go test arg1 arg2 arg3 -- This would compile test.go and all other local source files it refers to and then call it with arg1 arg2 arg3\n\n");
-}
-
 func main() {
-	flag.Usage = usage;
-
-	flag.Parse();
-	args := flag.Args();
+	args := os.Args[1:];
 	if len(args) == 0 {
-		flag.Usage();
+		fmt.Fprintln(os.Stderr, "go main-program [arg0 [arg1 ...]]");
 		os.Exit(1);
 	}
 
-	target := args[0];
+	target := path.Clean(args[0]);
+	if path.Ext(target) == ".go" {
+		target = target[0 : len(target)-3]
+	}
+
 	files, error := CollectSourceFiles(target);
 	if error != nil {
 		fmt.Fprintf(os.Stderr, "Can't %v\n", error);
@@ -184,13 +168,13 @@ func main() {
 	//	Linking produced objects into executable
 	//	TODO: On Windows this should add ".exe" to the target
 	targets := make([]string, len(files)+3);
-	targets[0] = path.Join(*bindir, *arch+"l");
+	targets[0] = path.Join(envbin, arch+"l");
 	targets[1] = "-o";
 	targets[2] = target;
 	doLink := false;
 	i := 3;
 	for _, v := range files {
-		targets[i] = v + "." + *arch;
+		targets[i] = v + "." + arch;
 		if !doLink {
 			if shouldUpdate, _ := shouldUpdate(targets[i], target); shouldUpdate {
 				doLink = true
@@ -199,9 +183,13 @@ func main() {
 		i++;
 	}
 	if doLink {
-		returnCode := exec(targets, "");
+		returnCode, error := exec(targets, "");
+		if error != nil {
+			fmt.Fprintf(os.Stderr, "Can't %s\n", error);
+			os.Exit(1);
+		}
 		if returnCode != 0 {
-			fmt.Fprintf(os.Stderr, "Error linking %v %v\n", target, files)
+			os.Exit(returnCode)
 		}
 	}
 
