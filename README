@@ -1,8 +1,3 @@
-A simple runner for simple go language programs.
+go is a simple runner for .go programs.
 
-Tested again the following go version:
-changeset:   4333:6892511bb0df
-tag:         tip
-user:        Russ Cox <rsc@golang.org>
-date:        Fri Dec 04 21:44:29 2009 -0800
-summary:     test/bench: use range in reverse-complement
+It has limited functionality: for example it won't work with locally included packages that are named differently than their corresponding source files. This implies that it's one local package per source file.
