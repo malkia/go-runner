@@ -5,65 +5,65 @@
 package main
 
 import (
-	"os";
-	"fmt";
-	"io/ioutil";
-	"go/parser";
-	"go/ast";
-	"strconv";
-	"path";
+	"os"
+	"fmt"
+	"io/ioutil"
+	"go/parser"
+	"go/ast"
+	"strconv"
+	"path"
 )
 
 func getmap(m map[string]string, k string) (v string) {
-	v, ok := m[k];
+	v, ok := m[k]
 	if !ok {
 		v = ""
 	}
-	return;
+	return
 }
 
 var (
-	curdir, _	= os.Getwd();
-	envbin		= os.Getenv("GOBIN");
-	archmap		= map[string]string{"amd64": "6", "386": "8", "arm": "5"};
-	arch		= getmap(archmap, os.Getenv("GOARCH"));
+	curdir, _ = os.Getwd()
+	envbin    = os.Getenv("GOBIN")
+	archmap   = map[string]string{"amd64": "6", "386": "8", "arm": "5"}
+	arch      = getmap(archmap, os.Getenv("GOARCH"))
 )
 
 func exec(args []string, dir string) (returnCode int, error os.Error) {
-	p, error := os.ForkExec(args[0], args, os.Environ(), dir, []*os.File{os.Stdin, os.Stdout, os.Stderr});
+	p, error := os.ForkExec(args[0], args, os.Environ(), dir, []*os.File{os.Stdin, os.Stdout, os.Stderr})
 	if error != nil {
 		return
 	}
-	m, error := os.Wait(p, 0);
+	m, error := os.Wait(p, 0)
 	if error != nil {
 		return
 	}
-	return int(m.WaitStatus), nil;
+	return int(m.WaitStatus), nil
 }
 
 func getLocalImports(filename string) (imports map[string]bool, error os.Error) {
-	source, error := ioutil.ReadFile(filename);
+	source, error := ioutil.ReadFile(filename)
 	if error != nil {
 		return
 	}
-	file, error := parser.ParseFile(filename, source, parser.ImportsOnly);
+	file, error := parser.ParseFile(filename, source, parser.ImportsOnly)
 	if error != nil {
 		return
 	}
 	for _, importDecl := range file.Decls {
-		importDecl, ok := importDecl.(*ast.GenDecl);
+		importDecl, ok := importDecl.(*ast.GenDecl)
 		if ok {
 			for _, importSpec := range importDecl.Specs {
-				importSpec, ok := importSpec.(*ast.ImportSpec);
+				importSpec, ok := importSpec.(*ast.ImportSpec)
 				if ok {
 					for _, importPath := range importSpec.Path {
-						importPath, _ := strconv.Unquote(string(importPath.Value));
+						importPath, _ := strconv.Unquote(string(importPath.Value))
 						if len(importPath) > 0 && importPath[0] == '.' {
 							if imports == nil {
 								imports = make(map[string]bool)
 							}
-							dir, _ := path.Split(filename);
-							imports[path.Join(dir, path.Clean(importPath))] = true;
+							dir, _ := path.Split(filename)
+							imports[path.Join(dir, path.Clean(importPath))] = true
 						}
 					}
 				}
@@ -71,25 +71,25 @@ func getLocalImports(filename string) (imports map[string]bool, error os.Error) 
 		}
 	}
 
-	return;
+	return
 }
 
 func collectSourceFiles(sourcePath string, sourceTable map[int]string, sourceSet map[string]int) (error os.Error) {
-	sourcePath = path.Clean(sourcePath);
+	sourcePath = path.Clean(sourcePath)
 
 	if index, exists := sourceSet[sourcePath]; exists {
-		sourceTable[index] = "";
-		sourceSet[sourcePath] = 0, false;
+		sourceTable[index] = ""
+		sourceSet[sourcePath] = 0, false
 	}
 
-	localImports, error := getLocalImports(sourcePath + ".go");
+	localImports, error := getLocalImports(sourcePath + ".go")
 	if error != nil {
 		return
 	}
 
-	index := len(sourceTable);
-	sourceSet[sourcePath] = index;
-	sourceTable[index] = sourcePath;
+	index := len(sourceTable)
+	sourceSet[sourcePath] = index
+	sourceTable[index] = sourcePath
 
 	for k, _ := range localImports {
 		if error = collectSourceFiles(k, sourceTable, sourceSet); error != nil {
@@ -97,37 +97,37 @@ func collectSourceFiles(sourcePath string, sourceTable map[int]string, sourceSet
 		}
 	}
 
-	return;
+	return
 }
 
 func CollectSourceFiles(sourcePath string) (sourceTable map[int]string, error os.Error) {
-	sourceTable = make(map[int]string);
-	return sourceTable, collectSourceFiles(sourcePath, sourceTable, make(map[string]int));
+	sourceTable = make(map[int]string)
+	return sourceTable, collectSourceFiles(sourcePath, sourceTable, make(map[string]int))
 }
 
 func shouldUpdate(sourceFile, targetFile string) (doUpdate bool, error os.Error) {
-	sourceStat, error := os.Lstat(sourceFile);
+	sourceStat, error := os.Lstat(sourceFile)
 	if error != nil {
 		return false, error
 	}
-	targetStat, error := os.Lstat(targetFile);
+	targetStat, error := os.Lstat(targetFile)
 	if error != nil {
 		return true, error
 	}
-	return targetStat.Mtime_ns < sourceStat.Mtime_ns, error;
+	return targetStat.Mtime_ns < sourceStat.Mtime_ns, error
 }
 
 func compile(target string) {
-	dir, filename := path.Split(target);
-	dir = path.Join(curdir, dir);
-	source := path.Join(dir, filename+".go");
-	object := path.Join(dir, filename+"."+arch);
-	doUpdate, error := shouldUpdate(source, object);
+	dir, filename := path.Split(target)
+	dir = path.Join(curdir, dir)
+	source := path.Join(dir, filename+".go")
+	object := path.Join(dir, filename+"."+arch)
+	doUpdate, error := shouldUpdate(source, object)
 	if doUpdate {
-		returnCode, error := exec([]string{path.Join(envbin, arch+"g"), filename + ".go"}, dir);
+		returnCode, error := exec([]string{path.Join(envbin, arch+"g"), filename + ".go"}, dir)
 		if error != nil {
-			fmt.Fprintf(os.Stderr, "Can't %s\n", error);
-			os.Exit(1);
+			fmt.Fprintf(os.Stderr, "Can't %s\n", error)
+			os.Exit(1)
 		}
 		if returnCode != 0 {
 			os.Exit(returnCode)
@@ -138,26 +138,26 @@ func compile(target string) {
 }
 
 func main() {
-	args := os.Args[1:];
+	args := os.Args[1:]
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "go main-program [arg0 [arg1 ...]]");
-		os.Exit(1);
+		fmt.Fprintln(os.Stderr, "go main-program [arg0 [arg1 ...]]")
+		os.Exit(1)
 	}
 
-	target := path.Clean(args[0]);
+	target := path.Clean(args[0])
 	if path.Ext(target) == ".go" {
 		target = target[0 : len(target)-3]
 	}
 
-	files, error := CollectSourceFiles(target);
+	files, error := CollectSourceFiles(target)
 	if error != nil {
-		fmt.Fprintf(os.Stderr, "Can't %v\n", error);
-		os.Exit(1);
+		fmt.Fprintf(os.Stderr, "Can't %v\n", error)
+		os.Exit(1)
 	}
 
 	// Compiling source files
 	for k := len(files) - 1; k >= 0; k-- {
-		v := files[k];
+		v := files[k]
 		if v != "" {
 			compile(v)
 		} else {
@@ -167,32 +167,33 @@ func main() {
 
 	//	Linking produced objects into executable
 	//	TODO: On Windows this should add ".exe" to the target
-	targets := make([]string, len(files)+3);
-	targets[0] = path.Join(envbin, arch+"l");
-	targets[1] = "-o";
-	targets[2] = target;
-	doLink := false;
-	i := 3;
+	targets := make([]string, len(files)+3)
+	targets[0] = path.Join(envbin, arch+"l")
+	targets[1] = "-o"
+	targets[2] = target
+	doLink := false
+	i := 3
 	for _, v := range files {
-		targets[i] = v + "." + arch;
+		targets[i] = v + "." + arch
 		if !doLink {
 			if shouldUpdate, _ := shouldUpdate(targets[i], target); shouldUpdate {
 				doLink = true
 			}
 		}
-		i++;
+		i++
 	}
 	if doLink {
-		returnCode, error := exec(targets, "");
+		returnCode, error := exec(targets, "")
 		if error != nil {
-			fmt.Fprintf(os.Stderr, "Can't %s\n", error);
-			os.Exit(1);
+			fmt.Fprintf(os.Stderr, "Can't %s\n", error)
+			os.Exit(1)
 		}
 		if returnCode != 0 {
 			os.Exit(returnCode)
 		}
 	}
 
-	os.Exec(path.Join(curdir, target), args, os.Environ());
-	fmt.Fprintf(os.Stderr, "Error running %v\n", args);
+	os.Exec(path.Join(curdir, target), args, os.Environ())
+	fmt.Fprintf(os.Stderr, "Error running %v\n", args)
+	os.Exit(1)
 }
