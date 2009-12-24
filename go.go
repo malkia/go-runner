@@ -25,20 +25,23 @@ func getmap(m map[string]string, k string) (v string) {
 var (
 	curdir, _ = os.Getwd()
 	envbin    = os.Getenv("GOBIN")
-	archmap   = map[string]string{"amd64": "6", "386": "8", "arm": "5"}
-	arch      = getmap(archmap, os.Getenv("GOARCH"))
+	arch      = getmap(map[string]string{"amd64": "6", "386": "8", "arm": "5"}, os.Getenv("GOARCH"))
 )
 
-func exec(args []string, dir string) (returnCode int, error os.Error) {
+func exec(args []string, dir string) {
 	p, error := os.ForkExec(args[0], args, os.Environ(), dir, []*os.File{os.Stdin, os.Stdout, os.Stderr})
 	if error != nil {
-		return
+		fmt.Fprintf( os.Stderr, "Can't %s\n", error );
+		os.Exit(1);
 	}
 	m, error := os.Wait(p, 0)
 	if error != nil {
-		return
+		fmt.Fprintf( os.Stderr, "Can't %s\n", error );
+		os.Exit(1);
 	}
-	return int(m.WaitStatus), nil
+	if m.WaitStatus != 0 {
+		os.Exit(int(m.WaitStatus));
+	}
 }
 
 func getLocalImports(filename string) (imports map[string]bool, error os.Error) {
@@ -124,14 +127,7 @@ func compile(target string) {
 	object := path.Join(dir, filename+"."+arch)
 	doUpdate, error := shouldUpdate(source, object)
 	if doUpdate {
-		returnCode, error := exec([]string{path.Join(envbin, arch+"g"), filename + ".go"}, dir)
-		if error != nil {
-			fmt.Fprintf(os.Stderr, "Can't %s\n", error)
-			os.Exit(1)
-		}
-		if returnCode != 0 {
-			os.Exit(returnCode)
-		}
+		exec([]string{path.Join(envbin, arch+"g"), filename + ".go"}, dir)
 	} else if error != nil {
 		fmt.Fprintln(os.Stderr, error)
 	}
@@ -165,34 +161,22 @@ func main() {
 		}
 	}
 
-	//	Linking produced objects into executable
-	//	TODO: On Windows this should add ".exe" to the target
 	targets := make([]string, len(files)+3)
 	targets[0] = path.Join(envbin, arch+"l")
 	targets[1] = "-o"
 	targets[2] = target
 	doLink := false
-	i := 3
-	for _, v := range files {
-		targets[i] = v + "." + arch
+	for i, v := range files {
+		targets[i+3] = v + "." + arch
 		if !doLink {
-			if shouldUpdate, _ := shouldUpdate(targets[i], target); shouldUpdate {
+			if shouldUpdate, _ := shouldUpdate(targets[i+3], target); shouldUpdate {
 				doLink = true
 			}
 		}
-		i++
 	}
 	if doLink {
-		returnCode, error := exec(targets, "")
-		if error != nil {
-			fmt.Fprintf(os.Stderr, "Can't %s\n", error)
-			os.Exit(1)
-		}
-		if returnCode != 0 {
-			os.Exit(returnCode)
-		}
+		exec(targets, "")
 	}
-
 	os.Exec(path.Join(curdir, target), args, os.Environ())
 	fmt.Fprintf(os.Stderr, "Error running %v\n", args)
 	os.Exit(1)
